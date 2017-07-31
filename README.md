@@ -2,7 +2,7 @@
 
 ## SFZero Juce Module for Multi-Timbral Operation
 
-This work is a fork of the [SFZero Juce module by Leo Olivers](https://github.com/altalogix/SFZeroModule), with the following extensions and changes:
+This work is an extension of [SFZero Juce module by Leo Olivers](https://github.com/altalogix/SFZeroModule), based on [SFZero by Steve Folta](https://github.com/stevefolta/SFZero), with the following extensions and changes:
 
 * Support multi-timbral operation (multiple instances on different MIDI channels)
 * Support MIDI program & bank selection message
@@ -11,7 +11,8 @@ This work is a fork of the [SFZero Juce module by Leo Olivers](https://github.co
 * Handle SF2 global zone generators, e.g. initialAttenuation
 * Save/restore Synth state with XML
 * Bug fixes and streamlining
-* Requires [Juce](http://www.juce.com) version 4.3 or later
+
+SFZeroMT requires [Juce](http://www.juce.com) version 4.3 or later.
 
 ## Usage
 
@@ -24,15 +25,15 @@ SFZeroMT can be used for projects that require multiple instances of a SFZero Sy
 
 In theory, it is possible to load a different SF2 file per channel, but this has not been tested. Standard operation is to have all synths load the same SF2 file, so they can share its sample data. How to load a SF2 file:
 
-``auto sound = new sfzero::SF2Sound(file, channel);   
-sound->loadRegions();   
-sound->loadSamples(&formatManager, progressVar, thread);   
-synth.swapSound(sound);   
-``
+`auto sound = new sfzero::SF2Sound(file, channel);  
+sound->loadRegions();  
+sound->loadSamples(&formatManager, progressVar, thread);  
+synth.swapSound(sound);  
+`
 
 Shared memory management works by reference counting. So if a sound is no longer used by any Synth, it will be deleted. Note that the term 'Sound' is a bit misleading here, as a SF2 file actually consists of many sounds, each of which is selected by a bank and program change MIDI message.
 
 ## Project Status
 
-This fork was worked on as a side project, without putting much effort into porting it to our standard coding and documentation norms. Anyone familiar with Juce however should be able to figure out its workings easily.
+This fork was worked on as a side project, without putting much effort into porting it to our standard coding and documentation norms. Anyone familiar with Juce should be able to figure out its workings easily.
 
