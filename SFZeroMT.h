@@ -1,18 +1,18 @@
 /*
 BEGIN_JUCE_MODULE_DECLARATION
-    ID:               SFZero
-    vendor:           altalogix
-    version:          2.0.2
-    name:             SFZero sfz player
-    description:      SFZero .szf/.sf2 soundfont player; forked from https://github.com/stevefolta/SFZero and converted to Juce module by Leo Olivers
-    website:          https://github.com/altalogix/SFZero
+    ID:               SFZeroMT
+    vendor:           cognitone
+    version:          1.0.0
+    name:             SFZeroMT
+    description:      Multi-timbral extension of SFZero by Steve Folta, converted to Juce module by Leo Olivers and extended by Cognitone. Run multiple Synth instances, sharing sample data in shared memory.
+    website:          https://github.com/cognitone/SFZeroMT
     dependencies:     juce_gui_basics, juce_audio_basics, juce_audio_processors
-	license:          MIT
+    license:          MIT
 END_JUCE_MODULE_DECLARATION 
 */
 
-#ifndef INCLUDED_SFZERO_H
-#define INCLUDED_SFZERO_H
+#ifndef INCLUDED_SFZEROMT_H
+#define INCLUDED_SFZEROMT_H
 
 #include "sfzero/RIFF.h"
 #include "sfzero/SF2.h"
@@ -30,6 +30,9 @@ END_JUCE_MODULE_DECLARATION
 #include "sfzero/SFZSynth.h"
 #include "sfzero/SFZVoice.h"
 
+#include "sfzero/SFZExtensions.h"
+#include "sfzero/SFZSharedResources.h"
 
-#endif   // INCLUDED_SFZERO_H
+
+#endif   // INCLUDED_SFZEROMT_H
 

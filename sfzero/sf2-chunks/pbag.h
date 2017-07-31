@@ -1,1 +1,2 @@
-SF2Field(word, genNdx) SF2Field(word, modNdx)
+SF2Field(word, genNdx)
+SF2Field(word, modNdx)

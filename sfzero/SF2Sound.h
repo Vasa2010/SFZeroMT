@@ -1,53 +1,60 @@
-/*************************************************************************************
- * Original code copyright (C) 2012 Steve Folta
- * Converted to Juce module (C) 2016 Leo Olivers
- * Forked from https://github.com/stevefolta/SFZero
- * For license info please see the LICENSE file distributed with this source code
- *************************************************************************************/
+/***********************************************************************
+ *  SFZeroMT Multi-Timbral Juce Module
+ *
+ *  Original SFZero Copyright (C) 2012 Steve Folta
+ *      https://github.com/stevefolta/SFZero
+ *  Converted to Juce module Copyright (C) 2016 Leo Olivers
+ *      https://github.com/altalogix/SFZero
+ *  Extended for multi-timbral operation Copyright (C) 2017 Cognitone
+ *      https://github.com/cognitone/SFZeroMT
+ *
+ *  Licensed under MIT License - Please read regard LICENSE document
+ ***********************************************************************/
+
 #ifndef SF2SOUND_H_INCLUDED
 #define SF2SOUND_H_INCLUDED
 
 #include "SFZSound.h"
+#include "SFZExtensions.h"
 
 namespace sfzero
 {
-
-class SF2Sound : public Sound
-{
-public:
-  explicit SF2Sound(const juce::File &file);
-  virtual ~SF2Sound();
-
-  void loadRegions() override;
-  void loadSamples(juce::AudioFormatManager *formatManager, double *progressVar = nullptr, juce::Thread *thread = nullptr) override;
-
-  struct Preset
-  {
-    juce::String name;
-    int bank;
-    int preset;
-    juce::OwnedArray<Region> regions;
-
-    Preset(juce::String nameIn, int bankIn, int presetIn) : name(nameIn), bank(bankIn), preset(presetIn) {}
-    ~Preset() {}
-    void addRegion(Region *region) { regions.add(region); }
-  };
-  void addPreset(Preset *preset);
-
-  int numSubsounds() override;
-  juce::String subsoundName(int whichSubsound) override;
-  void useSubsound(int whichSubsound) override;
-  int selectedSubsound() override;
-
-  Sample *sampleFor(double sampleRate);
-  void setSamplesBuffer(juce::AudioSampleBuffer *buffer);
-
-private:
-  juce::OwnedArray<Preset> presets_;
-  juce::HashMap<int, Sample *> samplesByRate_;
-  int selectedPreset_;
-  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SF2Sound)
-};
+    class SharedResourcesSF2;
+    
+    class SF2Sound : public Sound
+    {
+    public:
+        explicit SF2Sound (const juce::File &fileIn, int channel);
+        virtual ~SF2Sound ();
+        
+        SharedResourcesSF2* sharedSamples();
+        
+        void loadRegions() override;
+        void loadSamples(juce::AudioFormatManager *formatManager,
+                         double *progressVar = nullptr,
+                         juce::Thread *thread = nullptr) override;
+        
+        
+        void addPreset(Preset *preset);
+        
+        // Presets, channel and program selection:
+        // Pass -1 for bank to request all banks
+        int               getProgramCount(int bank) override;
+        juce::String      getProgramName (const ProgramSelection& selection) override;
+        ProgramSelection& getProgramSelection () override;
+        void              setProgramSelection (const ProgramSelection& selection) override;
+        ProgramList*      getProgramList () override;
+        
+        Sample* sampleFor (double sampleRate);
+        
+    private:
+        
+        bool hasBank (int bank);
+        juce::HashMap<int, Preset*> presets_;
+        SharedResourcesSF2::Ptr sf2Samples_;
+        
+        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SF2Sound)
+    };
 }
 
 #endif // SF2SOUND_H_INCLUDED

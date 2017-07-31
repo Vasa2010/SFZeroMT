@@ -1,329 +1,392 @@
-/*************************************************************************************
- * Original code copyright (C) 2012 Steve Folta
- * Converted to Juce module (C) 2016 Leo Olivers
- * Forked from https://github.com/stevefolta/SFZero
- * For license info please see the LICENSE file distributed with this source code
- *************************************************************************************/
+/***********************************************************************
+ *  SFZeroMT Multi-Timbral Juce Module
+ *
+ *  Original SFZero Copyright (C) 2012 Steve Folta
+ *      https://github.com/stevefolta/SFZero
+ *  Converted to Juce module Copyright (C) 2016 Leo Olivers
+ *      https://github.com/altalogix/SFZero
+ *  Extended for multi-timbral operation Copyright (C) 2017 Cognitone
+ *      https://github.com/cognitone/SFZeroMT
+ *
+ *  Licensed under MIT License - Please read regard LICENSE document
+ ***********************************************************************/
+
 #include "SFZDebug.h"
 #include "SFZRegion.h"
 #include "SFZSample.h"
 #include "SFZSound.h"
 #include "SFZVoice.h"
-#include <math.h>
 
-static const float globalGain = -1.0;
+using namespace juce;
+using namespace sfzero;
 
-sfzero::Voice::Voice()
-    : region_(nullptr), trigger_(0), curMidiNote_(0), curPitchWheel_(0), pitchRatio_(0), noteGainLeft_(0), noteGainRight_(0),
-      sourceSamplePosition_(0), sampleEnd_(0), loopStart_(0), loopEnd_(0), numLoops_(0), curVelocity_(0)
+Voice::Voice() :
+    region(nullptr),
+    trigger(0),
+    curMidiNote(0),
+    curPitchWheel(0),
+    noteGainL(0),
+    noteGainR(0),
+    pitchRatio(1),
+    sourceSamplePosition(0),
+    sampleStart(0),
+    sampleEnd(0),
+    loopStart(0),
+    loopEnd(0),
+    loopCounter(0),
+    curVelocity(0)
 {
-  ampeg_.setExponentialDecay(true);
+    ampeg.setExponentialDecay(true);
 }
 
-sfzero::Voice::~Voice() {}
-
-bool sfzero::Voice::canPlaySound(juce::SynthesiserSound *sound) { return dynamic_cast<sfzero::Sound *>(sound) != nullptr; }
-
-void sfzero::Voice::startNote(int midiNoteNumber, float floatVelocity, juce::SynthesiserSound *soundIn,
-                              int currentPitchWheelPosition)
+Voice::~Voice()
 {
-  sfzero::Sound *sound = dynamic_cast<sfzero::Sound *>(soundIn);
+}
 
-  if (sound == nullptr)
-  {
-    killNote();
-    return;
-  }
+bool Voice::canPlaySound (SynthesiserSound *sound)
+{
+    return dynamic_cast<Sound *>(sound) != nullptr;
+}
 
-  int velocity = static_cast<int>(floatVelocity * 127.0);
-  curVelocity_ = velocity;
-  if (region_ == nullptr)
-  {
-    region_ = sound->getRegionFor(midiNoteNumber, velocity);
-  }
-  if ((region_ == nullptr) || (region_->sample == nullptr) || (region_->sample->getBuffer() == nullptr))
-  {
-    killNote();
-    return;
-  }
-  if (region_->negative_end)
-  {
-    killNote();
-    return;
-  }
-
-  // Pitch.
-  curMidiNote_ = midiNoteNumber;
-  curPitchWheel_ = currentPitchWheelPosition;
-  calcPitchRatio();
-
-  // Gain.
-  double noteGainDB = globalGain + region_->volume;
-  // Thanks to <http:://www.drealm.info/sfz/plj-sfz.xhtml> for explaining the
-  // velocity curve in a way that I could understand, although they mean
-  // "log10" when they say "log".
-  double velocityGainDB = -20.0 * log10((127.0 * 127.0) / (velocity * velocity));
-  velocityGainDB *= region_->amp_veltrack / 100.0;
-  noteGainDB += velocityGainDB;
-  noteGainLeft_ = noteGainRight_ = static_cast<float>(juce::Decibels::decibelsToGain(noteGainDB));
-  // The SFZ spec is silent about the pan curve, but a 3dB pan law seems
-  // common.  This sqrt() curve matches what Dimension LE does; Alchemy Free
-  // seems closer to sin(adjustedPan * pi/2).
-  double adjustedPan = (region_->pan + 100.0) / 200.0;
-  noteGainLeft_ *= static_cast<float>(sqrt(1.0 - adjustedPan));
-  noteGainRight_ *= static_cast<float>(sqrt(adjustedPan));
-  ampeg_.startNote(&region_->ampeg, floatVelocity, getSampleRate(), &region_->ampeg_veltrack);
-
-  // Offset/end.
-  sourceSamplePosition_ = static_cast<double>(region_->offset);
-  sampleEnd_ = region_->sample->getSampleLength();
-  if ((region_->end > 0) && (region_->end < sampleEnd_))
-  {
-    sampleEnd_ = region_->end + 1;
-  }
-
-  // Loop.
-  loopStart_ = loopEnd_ = 0;
-  sfzero::Region::LoopMode loopMode = region_->loop_mode;
-  if (loopMode == sfzero::Region::sample_loop)
-  {
-    if (region_->sample->getLoopStart() < region_->sample->getLoopEnd())
+void Voice::startNote(int midiNoteNumber,
+                      float floatVelocity,
+                      SynthesiserSound *soundIn,
+                      int currentPitchWheelPosition)
+{
+    Sound *sound = dynamic_cast<Sound *>(soundIn);
+    
+    if (sound == nullptr)
     {
-      loopMode = sfzero::Region::loop_continuous;
+        killNote();
+        return;
+    }
+    
+    int velocity = static_cast<int>(floatVelocity * 127.0);
+    curVelocity = velocity;
+    if (region == nullptr)
+    {
+        region = sound->getRegionFor (midiNoteNumber, velocity);
+    }
+    if ((region == nullptr) || (region->sample == nullptr) || (region->sample->getBuffer() == nullptr))
+    {
+        killNote();
+        return;
+    }
+    if (region->negative_end)
+    {
+        killNote();
+        return;
+    }
+    
+    // Pitch.
+    curMidiNote = midiNoteNumber;
+    curPitchWheel = currentPitchWheelPosition;
+    calcPitchRatio();
+    
+    // Gain.
+    double noteGainDB = region->volume;
+    
+    // Thanks to <http:://www.drealm.info/sfz/plj-sfz.xhtml> for explaining the
+    // velocity curve in a way that I could understand, although they mean
+    // "log10" when they say "log".
+    double velocityGainDB = -20.0 * log10((127.0 * 127.0) / (velocity * velocity));
+    velocityGainDB *= region->amp_veltrack / 100.0;
+    noteGainDB += velocityGainDB;
+    noteGainL = noteGainR = static_cast<float>(Decibels::decibelsToGain(noteGainDB));
+    
+    // The SFZ spec is silent about the pan curve, but a 3dB pan law seems
+    // common.  This sqrt() curve matches what Dimension LE does; Alchemy Free
+    // seems closer to sin(adjustedPan * pi/2).
+    double adjustedPan = (region->pan + 100.0) / 200.0;
+    noteGainL *= static_cast<float>(sqrt(1.0 - adjustedPan));
+    noteGainR *= static_cast<float>(sqrt(adjustedPan));
+    ampeg.startNote(&region->ampeg, floatVelocity, getSampleRate(), &region->ampeg_veltrack);
+    
+    // Offset/end.
+    sourceSamplePosition = static_cast<double>(region->offset);
+    sampleStart = region->offset;
+    sampleEnd = region->sample->getSampleLength();
+    if ((region->end > 0) && (region->end < sampleEnd))
+    {
+        sampleEnd = region->end + 1;
+    }
+    
+    // Loop.
+    loopStart = loopEnd = 0;
+    Region::LoopMode loopMode = region->loop_mode;
+    if (loopMode == Region::sample_loop)
+    {
+        if (region->sample->getLoopStart() < region->sample->getLoopEnd())
+        {
+            loopMode = Region::loop_continuous;
+        }
+        else
+        {
+            loopMode = Region::no_loop;
+        }
+    }
+    if ((loopMode != Region::no_loop) && (loopMode != Region::one_shot))
+    {
+        if (region->loop_start < region->loop_end)
+        {
+            loopStart = region->loop_start;
+            loopEnd = region->loop_end;
+        }
+        else
+        {
+            loopStart = region->sample->getLoopStart();
+            loopEnd = region->sample->getLoopEnd();
+        }
+    }
+    loopCounter = 0;
+}
+
+void Voice::stopNote(float /*velocity*/, bool allowTailOff)
+{
+    if (!allowTailOff || (region == nullptr))
+    {
+        killNote();
+        return;
+    }
+    
+    if (region->loop_mode != Region::one_shot)
+    {
+        ampeg.noteOff();
+    }
+    if (region->loop_mode == Region::loop_sustain)
+    {
+        // Continue playing, but stop looping.
+        loopEnd = loopStart;
+    }
+}
+
+void Voice::stopNoteForGroup()
+{
+    if (region->off_mode == Region::fast)
+    {
+        ampeg.fastRelease();
     }
     else
     {
-      loopMode = sfzero::Region::no_loop;
+        ampeg.noteOff();
     }
-  }
-  if ((loopMode != sfzero::Region::no_loop) && (loopMode != sfzero::Region::one_shot))
-  {
-    if (region_->loop_start < region_->loop_end)
-    {
-      loopStart_ = region_->loop_start;
-      loopEnd_ = region_->loop_end;
-    }
-    else
-    {
-      loopStart_ = region_->sample->getLoopStart();
-      loopEnd_ = region_->sample->getLoopEnd();
-    }
-  }
-  numLoops_ = 0;
 }
 
-void sfzero::Voice::stopNote(float /*velocity*/, bool allowTailOff)
+void Voice::stopNoteQuick()
 {
-  if (!allowTailOff || (region_ == nullptr))
-  {
-    killNote();
-    return;
-  }
-
-  if (region_->loop_mode != sfzero::Region::one_shot)
-  {
-    ampeg_.noteOff();
-  }
-  if (region_->loop_mode == sfzero::Region::loop_sustain)
-  {
-    // Continue playing, but stop looping.
-    loopEnd_ = loopStart_;
-  }
+    ampeg.fastRelease();
 }
 
-void sfzero::Voice::stopNoteForGroup()
+void Voice::pitchWheelMoved (int newValue)
 {
-  if (region_->off_mode == sfzero::Region::fast)
-  {
-    ampeg_.fastRelease();
-  }
-  else
-  {
-    ampeg_.noteOff();
-  }
+    if (region == nullptr)
+        return;
+    curPitchWheel = newValue;
+    calcPitchRatio();
 }
 
-void sfzero::Voice::stopNoteQuick() { ampeg_.fastRelease(); }
-void sfzero::Voice::pitchWheelMoved(int newValue)
+void Voice::controllerMoved (int controllerNumber, int newValue)
 {
-  if (region_ == nullptr)
-  {
-    return;
-  }
-
-  curPitchWheel_ = newValue;
-  calcPitchRatio();
+    switch (controllerNumber)
+    {
+        case 121:
+            // Reset All Controllers
+            curPitchWheel = 0.0f;
+            break;
+            
+        default:
+            break;
+    }
 }
 
-void sfzero::Voice::controllerMoved(int /*controllerNumber*/, int /*newValue*/) { /***/}
-void sfzero::Voice::renderNextBlock(juce::AudioSampleBuffer &outputBuffer, int startSample, int numSamples)
+void Voice::renderNextBlock (AudioSampleBuffer &outputBuffer, int startSample, int numSamples)
 {
-  if (region_ == nullptr)
-  {
-    return;
-  }
-
-  juce::AudioSampleBuffer *buffer = region_->sample->getBuffer();
-  const float *inL = buffer->getReadPointer(0, 0);
-  const float *inR = buffer->getNumChannels() > 1 ? buffer->getReadPointer(1, 0) : nullptr;
-
-  float *outL = outputBuffer.getWritePointer(0, startSample);
-  float *outR = outputBuffer.getNumChannels() > 1 ? outputBuffer.getWritePointer(1, startSample) : nullptr;
-
-  int bufferNumSamples = buffer->getNumSamples(); // leoo
-
-  // Cache some values, to give them at least some chance of ending up in
-  // registers.
-  double sourceSamplePosition = this->sourceSamplePosition_;
-  float ampegGain = ampeg_.getLevel();
-  float ampegSlope = ampeg_.getSlope();
-  int samplesUntilNextAmpSegment = ampeg_.getSamplesUntilNextSegment();
-  bool ampSegmentIsExponential = ampeg_.getSegmentIsExponential();
-  float loopStart = static_cast<float>(this->loopStart_);
-  float loopEnd = static_cast<float>(this->loopEnd_);
-  float sampleEnd = static_cast<float>(this->sampleEnd_);
-
-  while (--numSamples >= 0)
-  {
-    int pos = static_cast<int>(sourceSamplePosition);
-    jassert(pos >= 0 && pos < bufferNumSamples); // leoo
-    float alpha = static_cast<float>(sourceSamplePosition - pos);
-    float invAlpha = 1.0f - alpha;
-    int nextPos = pos + 1;
-    if ((loopStart < loopEnd) && (nextPos > loopEnd))
+    if (region == nullptr)
     {
-      nextPos = static_cast<int>(loopStart);
+        return;
     }
-
-    // Simple linear interpolation with buffer overrun check
-    float nextL = nextPos < bufferNumSamples ? inL[nextPos] : inL[pos];
-    float nextR = inR ? (nextPos < bufferNumSamples ? inR[nextPos] : inR[pos]) : nextL;
-    float l = (inL[pos] * invAlpha + nextL * alpha);
-    float r = inR ? (inR[pos] * invAlpha + nextR * alpha) : l;
-
-    //// Simple linear interpolation, old version (possible buffer overrun with non-loop??)
-    // float l = (inL[pos] * invAlpha + inL[nextPos] * alpha);
-    // float r = inR ? (inR[pos] * invAlpha + inR[nextPos] * alpha) : l;
-
-    float gainLeft = noteGainLeft_ * ampegGain;
-    float gainRight = noteGainRight_ * ampegGain;
-    l *= gainLeft;
-    r *= gainRight;
-    // Shouldn't we dither here?
-
-    if (outR)
+    // Simplified the code below for readability,
+    // Speculating on register-optimization does probably not make much sense.
+    // Fixed issues with very narrow loops.
+    
+    AudioSampleBuffer *buffer = region->sample->getBuffer();
+    int bufferSize = buffer->getNumSamples();
+    
+    const float *inL = buffer->getReadPointer(0, 0);
+    const float *inR = buffer->getNumChannels() > 1 ? buffer->getReadPointer(1, 0) : nullptr;
+    
+    float  *outL = outputBuffer.getWritePointer(0, startSample);
+    float  *outR = outputBuffer.getNumChannels() > 1 ? outputBuffer.getWritePointer(1, startSample) : nullptr;
+    
+    float  ampegGain = ampeg.getLevel();
+    float  ampegSlope = ampeg.getSlope();
+    int    samplesUntilNextAmpSegment = ampeg.getSamplesUntilNextSegment();
+    bool   ampSegmentIsExponential = ampeg.getSegmentIsExponential();
+    bool   looping = (loopStart < loopEnd);
+    
+    while (--numSamples >= 0)
     {
-      *outL++ += l;
-      *outR++ += r;
+        // Simple linear interpolation between neighboring samples @ pos1, pos2
+        const int pos1 = floor(sourceSamplePosition);
+        const float alpha = sourceSamplePosition - (double)pos1;
+        const float alphaInv = 1.0f - alpha;
+        int pos2 = pos1 + 1;
+        
+        if (looping && (pos2 > loopEnd))
+            pos2 = loopStart;
+        
+        if (pos2 > bufferSize)
+            pos2 = bufferSize;
+        
+        jassert(pos1 >= 0 && pos1 < bufferSize && pos2 >= 0 && pos2 < bufferSize);
+        
+        float l = (inL[pos1] * alphaInv + inL[pos2] * alpha);
+        float r = inR ? (inR[pos1] * alphaInv + inR[pos2] * alpha) : l;
+        
+        // Shouldn't we dither here?
+        l *= (noteGainL * ampegGain);
+        r *= (noteGainR * ampegGain);
+        
+        if (outR)
+        {
+            *outL++ += l;
+            *outR++ += r;
+        }
+        else
+        {
+            *outL++ += (l + r) * 0.5f;
+        }
+        
+        // Advance to next sample
+        sourceSamplePosition += pitchRatio;
+        // Wrap around loop, if necessary
+        if (looping && (sourceSamplePosition >= loopEnd))
+        {
+            sourceSamplePosition = loopStart + (sourceSamplePosition - loopEnd);
+            loopCounter++;
+        }
+        
+        // Update EG
+        if (ampSegmentIsExponential)
+        {
+            ampegGain *= ampegSlope;
+        }
+        else
+        {
+            ampegGain += ampegSlope;
+        }
+        if (--samplesUntilNextAmpSegment < 0)
+        {
+            ampeg.setLevel(ampegGain);
+            ampeg.nextSegment();
+            ampegGain = ampeg.getLevel();
+            ampegSlope = ampeg.getSlope();
+            samplesUntilNextAmpSegment = ampeg.getSamplesUntilNextSegment();
+            ampSegmentIsExponential = ampeg.getSegmentIsExponential();
+        }
+        
+        if ((sourceSamplePosition >= sampleEnd) || ampeg.isDone())
+        {
+            killNote();
+            break;
+        }
     }
-    else
-    {
-      *outL++ += (l + r) * 0.5f;
-    }
-
-    // Next sample.
-    sourceSamplePosition += pitchRatio_;
-    if ((loopStart < loopEnd) && (sourceSamplePosition > loopEnd))
-    {
-      sourceSamplePosition = loopStart;
-      numLoops_ += 1;
-    }
-
-    // Update EG.
-    if (ampSegmentIsExponential)
-    {
-      ampegGain *= ampegSlope;
-    }
-    else
-    {
-      ampegGain += ampegSlope;
-    }
-    if (--samplesUntilNextAmpSegment < 0)
-    {
-      ampeg_.setLevel(ampegGain);
-      ampeg_.nextSegment();
-      ampegGain = ampeg_.getLevel();
-      ampegSlope = ampeg_.getSlope();
-      samplesUntilNextAmpSegment = ampeg_.getSamplesUntilNextSegment();
-      ampSegmentIsExponential = ampeg_.getSegmentIsExponential();
-    }
-
-    if ((sourceSamplePosition >= sampleEnd) || ampeg_.isDone())
-    {
-      killNote();
-      break;
-    }
-  }
-
-  this->sourceSamplePosition_ = sourceSamplePosition;
-  ampeg_.setLevel(ampegGain);
-  ampeg_.setSamplesUntilNextSegment(samplesUntilNextAmpSegment);
+    
+    ampeg.setLevel(ampegGain);
+    ampeg.setSamplesUntilNextSegment(samplesUntilNextAmpSegment);
 }
 
-bool sfzero::Voice::isPlayingNoteDown() { return region_ && region_->trigger != sfzero::Region::release; }
-
-bool sfzero::Voice::isPlayingOneShot() { return region_ && region_->loop_mode == sfzero::Region::one_shot; }
-
-int sfzero::Voice::getGroup() { return region_ ? region_->group : 0; }
-
-juce::uint64 sfzero::Voice::getOffBy() { return region_ ? region_->off_by : 0; }
-
-void sfzero::Voice::setRegion(sfzero::Region *nextRegion) { region_ = nextRegion; }
-
-juce::String sfzero::Voice::infoString()
+bool Voice::isPlayingNoteDown()
 {
-  const char *egSegmentNames[] = {"delay", "attack", "hold", "decay", "sustain", "release", "done"};
-
-  const static int numEGSegments(sizeof(egSegmentNames) / sizeof(egSegmentNames[0]));
-
-  const char *egSegmentName = "-Invalid-";
-  int egSegmentIndex = ampeg_.segmentIndex();
-  if ((egSegmentIndex >= 0) && (egSegmentIndex < numEGSegments))
-  {
-    egSegmentName = egSegmentNames[egSegmentIndex];
-  }
-
-  juce::String info;
-  info << "note: " << curMidiNote_ << ", vel: " << curVelocity_ << ", pan: " << region_->pan << ", eg: " << egSegmentName
-       << ", loops: " << numLoops_;
-  return info;
+    return region && region->trigger != Region::release;
 }
 
-void sfzero::Voice::calcPitchRatio()
+bool Voice::isPlayingOneShot()
 {
-  double note = curMidiNote_;
+    return region && region->loop_mode == Region::one_shot;
+}
 
-  note += region_->transpose;
-  note += region_->tune / 100.0;
+int Voice::getGroup()
+{
+    return region ? region->group : 0;
+}
 
-  double adjustedPitch = region_->pitch_keycenter + (note - region_->pitch_keycenter) * (region_->pitch_keytrack / 100.0);
-  if (curPitchWheel_ != 8192)
-  {
-    double wheel = ((2.0 * curPitchWheel_ / 16383.0) - 1.0);
-    if (wheel > 0)
+uint64 Voice::getOffBy()
+{
+    return region ? region->off_by : 0;
+}
+
+void Voice::setRegion(Sound* currentSoud, Region *nextRegion)
+{
+    sound = currentSoud;
+    region = nextRegion;
+}
+
+String Voice::infoString()
+{
+    const char *egSegmentNames[] = { "delay", "attack", "hold", "decay", "sustain", "release", "done" };
+    
+    const static int numEGSegments(sizeof(egSegmentNames) / sizeof(egSegmentNames[0]));
+    
+    const char *egSegmentName = "-Invalid-";
+    int egSegmentIndex = ampeg.segmentIndex();
+    if ((egSegmentIndex >= 0) && (egSegmentIndex < numEGSegments))
     {
-      adjustedPitch += wheel * region_->bend_up / 100.0;
+        egSegmentName = egSegmentNames[egSegmentIndex];
     }
-    else
+
+#if JUCE_DEBUG
+    SF2Sound* sf2sound = dynamic_cast<SF2Sound*>(sound);
+    String* namePtr = (sf2sound == nullptr)
+        ? nullptr
+        : sf2sound->sharedSamples()->sampleNameAt(region->offset);
+#else
+    String* namePtr = nullptr;
+#endif
+    String info;
+    info << "note: " << curMidiNote
+        << ", vel: " << curVelocity
+//      << ", pan: " << region->pan
+        << ", sample: " << (namePtr == nullptr ? "?" : *namePtr)
+        << ", rate: " << region->sample->getSampleRate()
+        << ", root: " << region->pitch_keycenter
+        << ", trp: " << region->transpose
+        << "/" << region->tune
+        << ", trk: " << region->pitch_keytrack
+//      << ", eg: " << egSegmentName
+        << ", loops: " << loopCounter;
+    return info;
+}
+
+void Voice::calcPitchRatio()
+{
+    double pitch = curMidiNote;
+    
+    pitch += region->transpose;
+    pitch += region->tune / 100.0;
+    
+    if (region->pitch_keytrack != 100)
+        pitch = region->pitch_keycenter + (pitch - region->pitch_keycenter) * (region->pitch_keytrack / 100.0);
+    
+    if (curPitchWheel != 8192)
     {
-      adjustedPitch += wheel * region_->bend_down / -100.0;
+        double wheel = ((2.0 * curPitchWheel / 16383.0) - 1.0);
+        if (wheel > 0)
+            pitch += wheel * region->bend_up / 100.0;
+        else
+            pitch += wheel * region->bend_down / -100.0;
     }
-  }
-  double targetFreq = fractionalMidiNoteInHz(adjustedPitch);
-  double naturalFreq = juce::MidiMessage::getMidiNoteInHertz(region_->pitch_keycenter);
-  pitchRatio_ = (targetFreq * region_->sample->getSampleRate()) / (naturalFreq * getSampleRate());
+    //double targetFreq = fractionalMidiNoteInHz(adjustedPitch);
+    //double naturalFreq = MidiMessage::getMidiNoteInHertz(region->pitch_keycenter);
+    //pitchRatio = (targetFreq * region->sample->getSampleRate()) / (naturalFreq * getSampleRate());
+    
+    // Code taken from from juce::SamplerVoice
+    pitchRatio = pow (2.0, (pitch - (double)region->pitch_keycenter) / 12.0) * region->sample->getSampleRate() / getSampleRate();
 }
 
-void sfzero::Voice::killNote()
+void Voice::killNote()
 {
-  region_ = nullptr;
-  clearCurrentNote();
+    region = nullptr;
+    clearCurrentNote();
 }
 
-double sfzero::Voice::fractionalMidiNoteInHz(double note, double freqOfA)
-{
-  // Like MidiMessage::getMidiNoteInHertz(), but with a float note.
-  note -= 69;
-  // Now 0 = A
-  return freqOfA * pow(2.0, note / 12.0);
-}

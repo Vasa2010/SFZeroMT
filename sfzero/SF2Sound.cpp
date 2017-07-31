@@ -1,124 +1,148 @@
-/*************************************************************************************
- * Original code copyright (C) 2012 Steve Folta
- * Converted to Juce module (C) 2016 Leo Olivers
- * Forked from https://github.com/stevefolta/SFZero
- * For license info please see the LICENSE file distributed with this source code
- *************************************************************************************/
+/***********************************************************************
+ *  SFZeroMT Multi-Timbral Juce Module
+ *
+ *  Original SFZero Copyright (C) 2012 Steve Folta
+ *      https://github.com/stevefolta/SFZero
+ *  Converted to Juce module Copyright (C) 2016 Leo Olivers
+ *      https://github.com/altalogix/SFZero
+ *  Extended for multi-timbral operation Copyright (C) 2017 Cognitone
+ *      https://github.com/cognitone/SFZeroMT
+ *
+ *  Licensed under MIT License - Please read regard LICENSE document
+ ***********************************************************************/
+
 #include "SF2Sound.h"
 #include "SF2Reader.h"
 #include "SFZSample.h"
+#include "SFZSharedResources.h"
 
-sfzero::SF2Sound::SF2Sound(const juce::File &file) : sfzero::Sound(file), selectedPreset_(0) {}
+using namespace juce;
+using namespace sfzero;
 
-sfzero::SF2Sound::~SF2Sound()
+
+SF2Sound::SF2Sound (const File &fileIn, int channel) :
+    Sound (fileIn, channel)
 {
-  // "presets" owns the regions, so clear them out of "regions" so ~SFZSound()
-  // doesn't try to delete them.
-  getRegions().clear();
-
-  // The samples all share a single buffer, so make sure they don't all delete
-  // it.
-  juce::AudioSampleBuffer *buffer = nullptr;
-  for (juce::HashMap<int, sfzero::Sample *>::Iterator i(samplesByRate_); i.next();)
-  {
-    buffer = i.getValue()->detachBuffer();
-  }
-  delete buffer;
 }
 
-class PresetComparator
+SF2Sound::~SF2Sound()
 {
-public:
-  static int compareElements(const sfzero::SF2Sound::Preset *first, const sfzero::SF2Sound::Preset *second)
-  {
-    int cmp = first->bank - second->bank;
-
-    if (cmp != 0)
+    // "presets_" owns the regions, so clear them out of "regions" so ~SFZSound() doesn't try to delete them.
+    getRegions().clear();
+    
+    HashMap<int, Preset*>::Iterator i (presets_);
+    while (i.next())
     {
-      return cmp;
+        delete i.getValue();
     }
-    return first->preset - second->preset;
-  }
-};
-
-void sfzero::SF2Sound::loadRegions()
-{
-  sfzero::SF2Reader reader(this, getFile());
-
-  reader.read();
-
-  // Sort the presets.
-  PresetComparator comparator;
-  presets_.sort(comparator);
-
-  useSubsound(0);
+    presets_.clear();
+    
+    sf2Samples_ = nullptr;
 }
 
-void sfzero::SF2Sound::loadSamples(juce::AudioFormatManager * /*formatManager*/, double *progressVar, juce::Thread *thread)
-{
-  sfzero::SF2Reader reader(this, getFile());
-  juce::AudioSampleBuffer *buffer = reader.readSamples(progressVar, thread);
 
-  if (buffer)
-  {
-    // All the SFZSamples will share the buffer.
-    for (juce::HashMap<int, sfzero::Sample *>::Iterator i(samplesByRate_); i.next();)
+
+SharedResourcesSF2* SF2Sound::sharedSamples()
+{
+    if (sf2Samples_ == nullptr)
+        sf2Samples_ = SharedResources::getInstance()->sf2Resources(file_);
+    
+    return sf2Samples_;
+}
+
+void SF2Sound::addPreset (Preset *preset)
+{
+    presets_.set(preset->index(), preset);
+}
+
+void SF2Sound::loadRegions()
+{
+    SF2Reader reader(this, getFile());
+    reader.read();
+    setProgramSelection(ProgramSelection());
+}
+
+void SF2Sound::loadSamples(AudioFormatManager *formatManager, double *progressVar, Thread *thread)
+{
+    sharedSamples()->loadSamples(this, formatManager, progressVar, thread);
+}
+
+
+ProgramSelection& SF2Sound::getProgramSelection ()
+{
+    // returns the current selection incl. name
+    return selection_;
+}
+
+void SF2Sound::setProgramSelection (const ProgramSelection& selection)
+{
+    // It is important to call this under a lock from Synth.
+    // Unused programs can be selected, but will produce no sound.
+    
+    selection_ = selection;
+    
+    Preset* preset = presets_[selection.index()];
+    if (preset)
     {
-      i.getValue()->setBuffer(buffer);
+        getRegions().clear();
+        getRegions().addArray(preset->regions);
+        selection_.name = preset->getName();
+        
+    } else {
+        getRegions().clear();
+        selection_.name = String::empty;
     }
-  }
-
-  if (progressVar)
-  {
-    *progressVar = 1.0;
-  }
 }
 
-void sfzero::SF2Sound::addPreset(sfzero::SF2Sound::Preset *preset) { presets_.add(preset); }
-
-int sfzero::SF2Sound::numSubsounds() { return presets_.size(); }
-
-juce::String sfzero::SF2Sound::subsoundName(int whichSubsound)
+int SF2Sound::getProgramCount (int bank)
 {
-  Preset *preset = presets_[whichSubsound];
-  juce::String result;
-
-  if (preset->bank != 0)
-  {
-    result += preset->bank;
-    result += "/";
-  }
-  result += preset->preset;
-  result += ": ";
-  result += preset->name;
-  return result;
+    // Always returns 128 (MIDI program numbers)
+    // Non-existent banks simply deliver empty sound names
+    return 128;
 }
 
-void sfzero::SF2Sound::useSubsound(int whichSubsound)
+String SF2Sound::getProgramName (const ProgramSelection& selection)
 {
-  selectedPreset_ = whichSubsound;
-  getRegions().clear();
-  getRegions().addArray(presets_[whichSubsound]->regions);
+    // Returns an empty default name for all unused program numbers
+    Preset* preset = presets_[selection.index()];
+    if (preset)
+        return preset->getName();
+    else
+        return String::empty;
 }
 
-int sfzero::SF2Sound::selectedSubsound() { return selectedPreset_; }
-
-sfzero::Sample *sfzero::SF2Sound::sampleFor(double sampleRate)
+ProgramList* SF2Sound::getProgramList()
 {
-  sfzero::Sample *sample = samplesByRate_[static_cast<int>(sampleRate)];
-
-  if (sample == nullptr)
-  {
-    sample = new sfzero::Sample(sampleRate);
-    samplesByRate_.set(static_cast<int>(sampleRate), sample);
-  }
-  return sample;
+    // Return a full list of all available ProgramSelections
+    // The ordering of this list is NOT related to MIDI program numbers
+    
+    ProgramList* list = new ProgramList();
+    HashMap<int, Preset*>::Iterator i (presets_);
+    while (i.next())
+    {
+        list->add (new ProgramSelection (i.getValue()->getSelection()));
+    }
+    ProgramSelectionComparator comparator;
+    list->sort(comparator);
+    return list;
 }
 
-void sfzero::SF2Sound::setSamplesBuffer(juce::AudioSampleBuffer *buffer)
+
+bool SF2Sound::hasBank (int bank)
 {
-  for (juce::HashMap<int, sfzero::Sample *>::Iterator i(samplesByRate_); i.next();)
-  {
-    i.getValue()->setBuffer(buffer);
-  }
+    HashMap<int, Preset*>::Iterator i (presets_);
+    while (i.next())
+    {
+        ProgramSelection& selection = i.getValue()->getSelection();
+        if (selection.bank == bank)
+            return true;
+    }
+    return false;
 }
+
+
+Sample *SF2Sound::sampleFor(double sampleRate)
+{
+    return sharedSamples()->getSample(sampleRate);
+}
+
