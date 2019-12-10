@@ -62,8 +62,8 @@ namespace sfzero
         double  pitchRatio;
         double  sourceSamplePosition;
         EG      ampeg;
-        long    sampleStart, sampleEnd;
-        long    loopStart, loopEnd;
+        SamplePosition sampleStart, sampleEnd;
+        SamplePosition loopStart, loopEnd;
         
         // Info only.
         int     loopCounter;

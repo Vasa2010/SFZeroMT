@@ -126,7 +126,7 @@ void SF2::Hydra::readFrom(InputStream *file, int64 pdtaChunkEnd)
     
 	#define HandleChunk(chunkName) 	\
 		if (FourCCEquals(chunk.id, #chunkName)) { 	\
-			numItems = chunk.size / SF2::chunkName::sizeInFile; 	\
+			numItems = (int)(chunk.size / SF2::chunkName::sizeInFile); 	\
 			chunkName##NumItems = numItems; 	\
 			chunkName##Items = new SF2::chunkName[numItems]; 	\
 			for (i = 0; i < numItems; ++i) 	\

@@ -90,7 +90,7 @@ void SF2Sound::setProgramSelection (const ProgramSelection& selection)
         
     } else {
         getRegions().clear();
-        selection_.name = String::empty;
+        selection_.name = String();
     }
 }
 
@@ -108,7 +108,7 @@ String SF2Sound::getProgramName (const ProgramSelection& selection)
     if (preset)
         return preset->getName();
     else
-        return String::empty;
+        return String();
 }
 
 ProgramList* SF2Sound::getProgramList()

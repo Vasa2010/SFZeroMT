@@ -31,13 +31,13 @@ namespace sfzero
         fourcc id;
         dword size;
         Type type;
-        juce::int64 start;
+        SamplePosition start;
         
         void readFrom(juce::InputStream *file);
         void seek(juce::InputStream *file);
         void seekAfter(juce::InputStream *file);
         
-        juce::int64 end() { return (start + size); }
+        SamplePosition end() { return (start + size); }
         juce::String readString(juce::InputStream *file);
     };
 }

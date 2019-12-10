@@ -132,7 +132,7 @@ namespace sfzero
             Hydra();
             ~Hydra();
             
-            void readFrom(juce::InputStream *file, juce::int64 pdtaChunkEnd);
+            void readFrom(juce::InputStream *file, SamplePosition pdtaChunkEnd);
             bool isComplete();
         };
     }

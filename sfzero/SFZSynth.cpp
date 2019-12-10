@@ -50,11 +50,17 @@ void Synth::swapSound (const SynthesiserSound::Ptr &newSound)
     sounds.add(newSound);
 }
 
+Sound* Synth::getSound ()
+{
+    SynthesiserSound::Ptr s = Synthesiser::getSound(0);
+    return dynamic_cast<Sound*>(s.get());
+}
+
 void Synth::setProgramSelection (const ProgramSelection& selection)
 {
     ScopedLock locker (lock);
     
-    Sound *sound = dynamic_cast<Sound *>(getSound(0));
+    Sound* sound = getSound();
     if (sound)
     {
         if (!selection.equals (sound->getProgramSelection()))
@@ -66,7 +72,7 @@ void Synth::setProgramSelection (const ProgramSelection& selection)
         
     } else {
         selectionCache_ = selection;
-        selectionCache_.name = String::empty;
+        selectionCache_.name = String();
     }
     jassert (selectionCache_.index() == selection.index());
     selectionChanged.set(1);
@@ -82,7 +88,7 @@ ProgramSelection& Synth::getProgramSelection ()
 {
     ScopedLock locker (lock);
     
-    Sound *sound = dynamic_cast<Sound *>(getSound(0));
+    Sound* sound = getSound();
     if (sound)
         return sound->getProgramSelection();
     else
@@ -93,7 +99,7 @@ int Synth::getProgramCount (int bank)
 {
     ScopedLock locker (lock);
     
-    Sound *sound = dynamic_cast<Sound *>(getSound(0));
+    Sound* sound = getSound();
     if (sound)
         return sound->getProgramCount(bank);
     else
@@ -104,18 +110,18 @@ String Synth::getProgramName (const ProgramSelection& selection)
 {
     ScopedLock locker (lock);
     
-    Sound *sound = dynamic_cast<Sound *>(getSound(0));
+    Sound* sound = getSound();
     if (sound)
         return sound->getProgramName(selection);
     else
-        return String::empty;
+        return String();
 }
 
 ProgramList* Synth::getProgramList()
 {
     ScopedLock locker (lock);
     
-    Sound *sound = dynamic_cast<Sound *>(getSound(0));
+    Sound* sound = getSound();
     if (sound)
         return sound->getProgramList();
     else
@@ -153,21 +159,21 @@ void  Synth::setParameter (int index, float newValue)
     switch (index)
     {
         case kParam_Volume:
-			masterVolumeCC_.set(juce::roundFloatToInt(value * 127));
+			masterVolumeCC_.set(juce::roundToInt(value * 127));
             masterVolume_.set(convertFaderToGain6dB (value));
             //DBG("fader=" << value << " gain=" << masterVolume_.get());
             break;
             
         case kParam_Pan:
             float l, r;
-            masterPanCC_.set(juce::roundFloatToInt(value * 127));
+            masterPanCC_.set(juce::roundToInt(value * 127));
             convertFaderToPan (value, l, r);
             masterPanL_.set(l);
             masterPanR_.set(r);
             break;
             
         case kParam_Send:
-            sendLevelCC_.set(juce::roundFloatToInt(value * 127));
+            sendLevelCC_.set(juce::roundToInt(value * 127));
             sendLevel_.set(convertFaderToGain0dB (value));
             break;
             
@@ -270,7 +276,7 @@ void Synth::noteOn (int midiChannel,
     // First, stop any currently-playing sounds in the group.
     //*** Currently, this only pays attention to the first matching region.
     int group = 0;
-    Sound *sound = dynamic_cast<Sound *>(getSound(0));
+    Sound* sound = getSound();
     
     if (sound)
     {
@@ -359,7 +365,7 @@ void Synth::noteOff (int midiChannel,
     Synthesiser::noteOff (midiChannel, midiNoteNumber, velocity, allowTailOff);
     
     // Start release region.
-    Sound *sound = dynamic_cast<Sound *>(getSound(0));
+    Sound* sound = getSound();
     if (sound)
     {
         Region *region = sound->getRegionFor(midiNoteNumber, noteVelocities_[midiNoteNumber], Region::release);
@@ -436,9 +442,9 @@ String Synth::voiceInfoString()
 
 
 
-XmlElement* Synth::getStateXML ()
+std::unique_ptr<XmlElement> Synth::getStateXML ()
 {
-    XmlElement* xml = new XmlElement ("SYNTH");
+    auto xml = std::make_unique<XmlElement> ("SYNTH");
     xml->setAttribute ("slot",  channel_-1);
     // File and patch selection is handled by the parent (owner)
     // CC and raw values are saved to be robust against future changes in MIDI or UI handling
@@ -452,7 +458,7 @@ XmlElement* Synth::getStateXML ()
     return xml;
 }
 
-bool Synth::setStateXML (XmlElement* xml)
+bool Synth::setStateXML (const XmlElement* xml)
 {
     if ((xml == nullptr) || !xml->hasTagName ("SYNTH"))
         return false;

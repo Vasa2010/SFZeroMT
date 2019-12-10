@@ -75,14 +75,14 @@ namespace sfzero
         int lovel, hivel;
         Trigger trigger;
         int group;
-        juce::int64 off_by;
+        SamplePosition off_by;
         OffMode off_mode;
         
-        juce::int64 offset;
-        juce::int64 end;
+        SamplePosition offset;
+        SamplePosition end;
         bool negative_end;
         LoopMode loop_mode;
-        juce::int64 loop_start, loop_end;
+        SamplePosition loop_start, loop_end;
         int transpose;
         int tune;
         int pitch_keycenter, pitch_keytrack;

@@ -30,6 +30,9 @@ namespace sfzero
     
     // Special types for SF2 fields.
     typedef char char20[20];
+    
+    // Sample postions in sound
+    typedef juce::int64 SamplePosition;
 }
 
 #endif // SF2WINTYPES_H_INCLUDED

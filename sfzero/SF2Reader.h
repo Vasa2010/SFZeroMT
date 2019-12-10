@@ -42,7 +42,7 @@ namespace sfzero
         
     private:
         SF2Sound *sound_;
-        juce::ScopedPointer<juce::FileInputStream> file_;
+        std::unique_ptr<juce::FileInputStream> file_;
         
         void addGeneratorToRegion (word genOper, SF2::genAmountType *amount, Region *region);
         

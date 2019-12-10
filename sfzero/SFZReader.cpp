@@ -280,7 +280,7 @@ void sfzero::Reader::read(const char *text, unsigned int length)
           }
           else if (opcode == "end")
           {
-            juce::int64 end2 = value.getLargeIntValue();
+            SamplePosition end2 = value.getLargeIntValue();
             if (end2 < 0)
             {
               buildingRegion->negative_end = true;
@@ -497,7 +497,7 @@ const char *sfzero::Reader::readPathInto(juce::String *pathOut, const char *pIn,
   }
   else
   {
-    *pathOut = juce::String::empty;
+    *pathOut = juce::String();
   }
   return p;
 }

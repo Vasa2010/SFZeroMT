@@ -164,7 +164,7 @@ sfzero::SharedResourcesSF2::~SharedResourcesSF2 ()
         delete i.getValue();
     }
 #if JUCE_DEBUG
-    for (juce::HashMap<int, juce::String*>::Iterator i(sampleNamesByOffset_); i.next();)
+    for (juce::HashMap<SamplePosition, juce::String*>::Iterator i(sampleNamesByOffset_); i.next();)
     {
         delete i.getValue();
     }

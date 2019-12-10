@@ -96,14 +96,14 @@ namespace sfzero
                           juce::Thread *thread);
 
 #if JUCE_DEBUG
-        juce::String* sampleNameAt (int offset)
+        juce::String* sampleNameAt (SamplePosition offset)
             { return sampleNamesByOffset_[offset]; }
         
-        void sampleNameAtPut (int offset, const juce::String name)
+        void sampleNameAtPut (SamplePosition offset, const juce::String name)
             { sampleNamesByOffset_.set(offset, new juce::String(name)); }
         
     private:
-        juce::HashMap<int, juce::String*> sampleNamesByOffset_; // for debugging only
+        juce::HashMap<SamplePosition, juce::String*> sampleNamesByOffset_; // for debugging only
 #endif
     private:
         juce::HashMap<int, Sample*> samplesByRate_;

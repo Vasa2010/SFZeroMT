@@ -20,8 +20,8 @@
 namespace sfzero
 {
     class Synth :
-    public juce::Synthesiser,
-    public juce::ChangeBroadcaster
+        public juce::Synthesiser,
+        public juce::ChangeBroadcaster
     {
     public:
         
@@ -64,13 +64,16 @@ namespace sfzero
         float getParameter (int index);
         void  setParameter (int index, float newValue);
         
-        juce::XmlElement* getStateXML ();
-        bool setStateXML (juce::XmlElement* xml);
+        std::unique_ptr<juce::XmlElement> getStateXML ();
+        bool setStateXML (const juce::XmlElement* xml);
         
         /** Allow my ChangeListener to distinguish between program selection or other parameter changes */
         bool hasProgramSelectionChanged (bool reset = true);
         
         bool usesEffectsUnit();
+        
+        /** Return the only sound (soundbank actually), typecast to sfzero::Sound */
+        Sound* getSound ();
         
     private:
         

@@ -41,17 +41,17 @@ void SF2Reader::read()
     SF2::Hydra hydra;
     file_->setPosition(0);
     RIFFChunk riffChunk;
-    riffChunk.readFrom(file_);
+    riffChunk.readFrom(file_.get());
     while (file_->getPosition() < riffChunk.end())
     {
         RIFFChunk chunk;
-        chunk.readFrom(file_);
+        chunk.readFrom(file_.get());
         if (FourCCEquals(chunk.id, "pdta"))
         {
-            hydra.readFrom(file_, chunk.end());
+            hydra.readFrom(file_.get(), chunk.end());
             break;
         }
-        chunk.seekAfter(file_);
+        chunk.seekAfter(file_.get());
     }
     if (!hydra.isComplete())
     {
@@ -200,7 +200,7 @@ void SF2Reader::read()
     // Debug: Register names of individual SF2 samples by offset in sample data chunk
     for (int whichSample = 0; whichSample < hydra.shdrNumItems - 1; ++whichSample)
     {
-        int offset = hydra.shdrItems[whichSample].start;
+        SamplePosition offset = hydra.shdrItems[whichSample].start;
         juce::String name (hydra.shdrItems[whichSample].sampleName, 20);
         sound_->sharedSamples()->sampleNameAtPut(offset, name);
         //DBG ("offset=" << offset << " name=" << name);
@@ -219,30 +219,30 @@ AudioSampleBuffer *SF2Reader::readSampleData (double *progressVar, Thread *threa
     // Find the "sdta" chunk.
     file_->setPosition(0);
     RIFFChunk riffChunk;
-    riffChunk.readFrom(file_);
+    riffChunk.readFrom(file_.get());
     bool found = false;
     RIFFChunk chunk;
     while (file_->getPosition() < riffChunk.end())
     {
-        chunk.readFrom(file_);
+        chunk.readFrom(file_.get());
         if (FourCCEquals(chunk.id, "sdta"))
         {
             found = true;
             break;
         }
-        chunk.seekAfter(file_);
+        chunk.seekAfter(file_.get());
     }
     int64 sdtaEnd = chunk.end();
     found = false;
     while (file_->getPosition() < sdtaEnd)
     {
-        chunk.readFrom(file_);
+        chunk.readFrom(file_.get());
         if (FourCCEquals(chunk.id, "smpl"))
         {
             found = true;
             break;
         }
-        chunk.seekAfter(file_);
+        chunk.seekAfter(file_.get());
     }
     if (!found)
     {
@@ -258,7 +258,7 @@ AudioSampleBuffer *SF2Reader::readSampleData (double *progressVar, Thread *threa
      */
     
     static const int bufferSize = 128000;
-    int numSamples = chunk.size / sizeof(short);
+    int numSamples = (int)chunk.size / sizeof(short);
     AudioSampleBuffer *sampleBuffer = new AudioSampleBuffer(1, numSamples);
     //sound_->addError(String(numSamples) + " samples");
     

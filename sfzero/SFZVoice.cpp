@@ -227,10 +227,10 @@ void Voice::renderNextBlock (AudioSampleBuffer &outputBuffer, int startSample, i
     while (--numSamples >= 0)
     {
         // Simple linear interpolation between neighboring samples @ pos1, pos2
-        const int pos1 = floor(sourceSamplePosition);
+        const SamplePosition pos1 = floor(sourceSamplePosition);
         const float alpha = sourceSamplePosition - (double)pos1;
         const float alphaInv = 1.0f - alpha;
-        int pos2 = pos1 + 1;
+        SamplePosition pos2 = pos1 + 1;
         
         if (looping && (pos2 > loopEnd))
             pos2 = loopStart;
