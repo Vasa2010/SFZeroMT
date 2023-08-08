@@ -40,7 +40,7 @@ Sound::~Sound()
     sfzSamples_ = nullptr;
 }
 
-SharedResourcesSFZ* Sound::sharedSamples()
+SharedResourcesSFZ::Ptr Sound::sharedSamples()
 {
     if (sfzSamples_ == nullptr)
         sfzSamples_ = SharedResources::getInstance()->sfzResources(file_);

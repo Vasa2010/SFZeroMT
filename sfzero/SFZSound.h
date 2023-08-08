@@ -33,7 +33,7 @@ namespace sfzero
         explicit Sound (const juce::File &file, int channel);
         virtual ~Sound ();
         
-        SharedResourcesSFZ* sharedSamples();
+        SharedResourcesSFZ::Ptr sharedSamples();
         
         typedef juce::ReferenceCountedObjectPtr<Sound> Ptr;
         

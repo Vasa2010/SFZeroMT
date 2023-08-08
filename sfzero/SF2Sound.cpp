@@ -42,7 +42,7 @@ SF2Sound::~SF2Sound()
 
 
 
-SharedResourcesSF2* SF2Sound::sharedSamples()
+SharedResourcesSF2::Ptr SF2Sound::sharedSamples()
 {
     if (sf2Samples_ == nullptr)
         sf2Samples_ = SharedResources::getInstance()->sf2Resources(file_);

@@ -27,7 +27,7 @@ namespace sfzero
         explicit SF2Sound (const juce::File &fileIn, int channel);
         virtual ~SF2Sound ();
         
-        SharedResourcesSF2* sharedSamples();
+        SharedResourcesSF2::Ptr sharedSamples();
         
         void loadRegions() override;
         void loadSamples(juce::AudioFormatManager *formatManager,
